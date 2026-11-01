@@ -1,0 +1,46 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: 题库与安全校验
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 题库结构校验
+        run: node tools/validate-data.js
+
+      - name: 静态安全扫描
+        shell: pwsh
+        run: ./tools/security-scan.ps1
+
+      - name: 确认零第三方依赖
+        run: |
+          if [ -f package.json ] || [ -f package-lock.json ] || [ -f yarn.lock ]; then
+            echo "::error::检测到依赖清单，本项目应保持零依赖"
+            exit 1
+          fi
+          echo "OK: 无依赖清单，纯静态项目"
+
+      - name: 确认无外部资源引用
+        run: |
+          if grep -rInE '(src|href)[[:space:]]*=[[:space:]]*["'"'"']https?://' index.html app.js styles.css data/ ; then
+            echo "::error::检测到外部资源引用，项目必须完全离线可用"
+            exit 1
+          fi
+          echo "OK: 无外部资源引用"
