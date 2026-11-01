@@ -40,7 +40,7 @@ Check "未发现硬编码密钥/私钥" ($secretHits.Count -eq 0) ($secretHits -
 
 Add-Line ""
 Add-Line "=== 2. 危险 JavaScript API ==="
-$webFiles = $files | Where-Object { ($_.Extension -eq '.js' -or $_.Extension -eq '.html') -and $_.FullName -notmatch '\\tools\\' }
+$webFiles = $files | Where-Object { ($_.Extension -eq '.js' -or $_.Extension -eq '.html') -and $_.FullName -notmatch '[/\\]tools[/\\]' }
 $jsFiles = $webFiles
 Add-Line "  (扫描范围: 浏览器运行时文件 index.html / app.js / data/*.js；tools/ 下的 Node 脚本不参与浏览器 API 检查)"
 foreach ($bad in @('eval\s*\(', 'new\s+Function\s*\(', 'setTimeout\s*\(\s*["'']', 'setInterval\s*\(\s*["'']')) {
