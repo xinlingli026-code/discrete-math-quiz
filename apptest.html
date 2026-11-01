@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>端到端自检 · 真实 app.js</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">∧∨¬</span>
+    <div class="brand-txt"><h1>端到端自检</h1><p>驱动真实 app.js 验证提交与判分</p></div>
+  </div>
+  <div class="top-actions">
+    <div class="seg" id="modeSeg"><button class="seg-btn is-on" data-mode="seq">顺序练习</button><button class="seg-btn" data-mode="random">随机组卷</button><button class="seg-btn" data-mode="wrong">错题重练</button></div>
+    <button class="icon-btn" id="btnStats">统计</button>
+    <button class="icon-btn" id="btnCheat">速查</button>
+    <button class="icon-btn" id="btnTheme">◐</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-block"><h3>小节</h3><ul class="sec-list" id="secList"></ul></div>
+    <div class="side-block"><h3>题型筛选</h3><div class="chips" id="typeChips"></div></div>
+    <div class="side-block"><h3>状态筛选</h3>
+      <div class="chips" id="statusChips">
+        <button class="chip is-on" data-status="all">全部</button>
+        <button class="chip" data-status="todo">未做</button>
+        <button class="chip" data-status="wrong">错题</button>
+        <button class="chip" data-status="fav">收藏</button>
+      </div>
+    </div>
+    <div class="side-block"><h3>进度</h3>
+      <div class="prog-line"><span id="progText">—</span></div>
+      <div class="bar"><i id="progBar"></i></div>
+      <div class="mini-stats">
+        <div><b id="stDone">0</b><span>已完成</span></div>
+        <div><b id="stAcc">—</b><span>正确率</span></div>
+        <div><b id="stFav">0</b><span>收藏</span></div>
+      </div>
+      <div class="side-btns">
+        <button class="mini-btn" id="btnExport">导出进度</button>
+        <button class="mini-btn" id="btnImport">导入进度</button>
+        <button class="mini-btn danger" id="btnReset">重置进度</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" hidden>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="panel" id="paperPanel" hidden>
+      <h2>随机组卷</h2><p class="muted">选择范围与题量，自动生成一份练习卷，可开启计时。</p>
+      <div class="paper-grid">
+        <label>题量<select id="pCount"><option>10</option><option selected>20</option><option>30</option><option>50</option></select></label>
+        <label>小节<select id="pScope"><option value="all" selected>全部小节</option></select></label>
+        <label class="ck"><input type="checkbox" id="pTimer" checked> 计时（到时自动交卷）</label>
+      </div>
+      <div class="paper-actions">
+        <button class="btn primary" id="btnMakePaper">生成试卷</button>
+        <button class="btn" id="btnShuffleAll">随机全部题序</button>
+      </div>
+    </section>
+    <div class="run-head" id="runHead" hidden>
+      <div class="rh-left"><span class="rh-title" id="rhTitle">顺序练习</span><span class="rh-meta" id="rhMeta"></span></div>
+      <div class="rh-right"><span class="timer" id="timer" hidden>00:00</span><button class="mini-btn" id="btnSearch">搜索题目</button></div>
+    </div>
+    <section id="qWrap" class="q-wrap"></section>
+    <div class="empty" id="emptyBox" hidden><p>当前筛选条件下没有题目。</p><button class="btn" id="btnResetFilter">清除筛选条件</button></div>
+    <nav class="navbar" id="navBar" hidden>
+      <button class="btn" id="btnPrev">← 上一题</button>
+      <div class="nav-dots" id="navDots"></div>
+      <button class="btn primary" id="btnNext">下一题 →</button>
+    </nav>
+
+    <section class="panel" style="margin-top:20px">
+      <h2>端到端测试结果</h2>
+      <pre id="e2e" style="font:12.5px/1.7 Consolas,monospace;white-space:pre-wrap;margin:0"></pre>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="statsModal" hidden><div class="modal-box wide"><button class="modal-x" data-close>×</button><h2>学习统计</h2><div class="stat-wrap" id="statWrap"></div></div></div>
+<div class="modal" id="cheatModal" hidden><div class="modal-box wide"><button class="modal-x" data-close>×</button><h2>考点速查卡</h2><div class="cheat-wrap" id="cheatWrap"></div></div></div>
+<div class="modal" id="searchModal" hidden><div class="modal-box"><button class="modal-x" data-close>×</button><h2>搜索题目</h2><input class="search-input" id="searchInput" type="search" placeholder="输入关键词" autocomplete="off"><div class="search-results" id="searchResults"></div></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>window.BANK = window.BANK || [];</script>
+<script src="data/sec11.js"></script>
+<script src="data/sec12.js"></script>
+<script src="data/sec13.js"></script>
+<script src="data/sec14.js"></script>
+<script src="data/sec15a.js"></script>
+<script src="data/sec15b.js"></script>
+<script src="data/sec16.js"></script>
+<script src="app.js"></script>
+<script>
+/* 端到端：直接驱动真实 app.js 的 DOM 与事件，验证三种提交场景 */
+(function () {
+  var OUT = [], fails = 0;
+  function log(s) { OUT.push(s); }
+  function part(pid) { return document.querySelector('.part[data-part="' + pid + '"]'); }
+  function stamp(pid) { var p = part(pid); return p ? (p.querySelector('.stamp') || {}).textContent : '(元素不存在)'; }
+  function cls(pid) { var p = part(pid); return p ? p.className : '(无)'; }
+  function submitShort(pid, text) {
+    var inp = document.querySelector('input[data-part="' + pid + '"]');
+    if (!inp) return '找不到输入框 ' + pid;
+    inp.value = text;
+    var btn = part(pid).querySelector('.short-wrap .btn');
+    btn.click();
+    return 'ok';
+  }
+  function clickOpt(pid, text) {
+    var p = part(pid);
+    var btns = p.querySelectorAll('.opt');
+    for (var i = 0; i < btns.length; i++) if (btns[i].textContent === text) { btns[i].click(); return true; }
+    return false;
+  }
+  function check(name, got, want) {
+    var ok = got === want;
+    if (!ok) fails++;
+    log((ok ? '  ✓ ' : '  ✗ ') + name + '：实际「' + got + '」' + (ok ? '' : '，期望「' + want + '」'));
+  }
+  function t(fn) { try { fn(); } catch (e) { fails++; log('  ✗ 异常：' + e.message); } }
+
+  setTimeout(function () {
+    log('=== 场景 1：开放表述题，答案措辞与标准答案不同（曾被误判为"错误"） ===');
+    t(function () {
+      submitShort('1.1#1#e', 'It depends on the value of x');
+      check('判分标记', stamp('1.1#1#e'), '✎ 待自评');
+      check('边框状态', cls('1.1#1#e').indexOf('st-skip') >= 0 ? 'st-skip' : cls('1.1#1#e'), 'st-skip');
+      var ref = part('1.1#1#e').querySelector('.ref');
+      check('参考答案已自动展开', ref && !ref.hidden ? '已展开' : '未展开', '已展开');
+    });
+
+    log('');
+    log('=== 场景 2：确定性公式题，答对 ===');
+    t(function () {
+      submitShort('1.1#13#a', 'p∧q');
+      check('判分标记', stamp('1.1#13#a'), '✓ 正确');
+    });
+
+    log('');
+    log('=== 场景 3：确定性公式题，答错 ===');
+    t(function () {
+      submitShort('1.1#13#a', 'p∨q');
+      check('判分标记', stamp('1.1#13#a'), '✗ 错误');
+    });
+
+    log('');
+    log('=== 场景 4：判断题（自动判分） ===');
+    t(function () {
+      clickOpt('1.1#8#a', 'True');
+      check('1.1#8#a 选 True', stamp('1.1#8#a'), '✓ 正确');
+    });
+
+    log('');
+    log('=== 场景 5：主观题 —— 看答案后自评 ===');
+    t(function () {
+      var revs = document.querySelectorAll('[data-rev="1.1#10"]');
+      check('找到"显示答案"按钮', revs.length > 0 ? '有' : '无', '有');
+      revs[0].click();
+      var btns = part('1.1#10#a').querySelectorAll('.sbtn');
+      check('看答案后出现自评按钮', btns.length > 0 ? '有' : '无', '有');
+      btns[0].click();
+      check('自评为正确', stamp('1.1#10#a'), '✓ 正确');
+    });
+
+    log('');
+    log('=== 场景 6：切换"显示答案/隐藏答案" ===');
+    t(function () {
+      var rev = document.querySelector('[data-rev="1.1#11"]');
+      rev.click();
+      check('按钮文案', rev.textContent, '隐藏答案');
+      var ref = part('1.1#11#a').querySelector('.ref');
+      check('答案区可见', ref && !ref.hidden ? '可见' : '隐藏', '可见');
+      rev.click();
+      check('再次点击后文案', rev.textContent, '显示答案');
+      var ref2 = part('1.1#11#a').querySelector('.ref');
+      check('答案区重新隐藏', ref2 && ref2.hidden ? '隐藏' : '可见', '隐藏');
+    });
+
+    log('');
+    log('=== 汇总 ===');
+    log('  失败项：' + fails);
+    document.getElementById('e2e').textContent = OUT.join('\n');
+  }, 400);
+})();
+</script>
+</body>
+</html>

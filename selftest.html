@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>判分引擎自检</title>
+<style>body{font:13px/1.6 Consolas,monospace;padding:20px;white-space:pre-wrap}</style>
+</head><body>
+<div id="out">loading…</div>
+<div id="e" style="margin-top:20px;padding-top:12px;border-top:2px solid #888"></div>
+<script>window.BANK = window.BANK || [];</script>
+<script src="data/sec11.js"></script>
+<script src="data/sec12.js"></script>
+<script src="data/sec13.js"></script>
+<script src="data/sec14.js"></script>
+<script src="data/sec15a.js"></script>
+<script src="data/sec15b.js"></script>
+<script src="data/sec16.js"></script>
+<script>
+/* ===== 与 app.js 完全一致的判分逻辑（复制过来做自检） ===== */
+var SUB_DIGITS = { '₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9' };
+var SUP_MAP = { '⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','ⁿ':'n' };
+function norm(s) {
+  if (s == null) return '';
+  var t = String(s);
+  t = t.replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+  t = t.replace(/[₀-₉]/g, function (c) { return SUB_DIGITS[c]; });
+  t = t.replace(/[⁰-⁹ⁿ]/g, function (c) { return SUP_MAP[c]; });
+  t = t.toLowerCase();
+  t = t.replace(/[∧&·∙]/g, '∧');
+  t = t.replace(/[∨|]/g, '∨');
+  t = t.replace(/→|⇒|⊃|⟶|->|=>|-->/g, '→');
+  t = t.replace(/↔|⇔|≡|<->|<=>/g, '↔');
+  t = t.replace(/[（]/g, '(').replace(/[）]/g, ')');
+  t = t.replace(/[“”„]/g, '"').replace(/[‘’]/g, "'");
+  t = t.replace(/[，、]/g, ',').replace(/[。；：]/g, ';');
+  t = t.replace(/\s+/g, '');
+  t = t.replace(/[.;]+$/, '');
+  return t;
+}
+function variants(s) {
+  var raw = String(s == null ? '' : s);
+  var a = norm(raw.replace(/!/g, '¬'));
+  var b = norm(raw.replace(/!/g, '∨'));
+  return a === b ? [a] : [a, b];
+}
+function words(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5 ]+/g, ' ').split(/\s+/).filter(Boolean);
+}
+function looseEq(user, ans) {
+  var aw = words(ans), uw = words(user);
+  if (aw.length < 5 || uw.length < 5) return false;
+  var set = {}, hit = 0;
+  uw.forEach(function (w) { set[w] = 1; });
+  aw.forEach(function (w) { if (set[w]) hit++; });
+  return hit / aw.length >= 0.78;
+}
+function matchAny(user, ansList) {
+  var uv = variants(user);
+  for (var i = 0; i < ansList.length; i++) {
+    var av = variants(ansList[i]);
+    for (var a = 0; a < uv.length; a++) for (var b = 0; b < av.length; b++) {
+      if (uv[a] && uv[a] === av[b]) return true;
+    }
+    if (looseEq(user, ansList[i])) return true;
+  }
+  return false;
+}
+/* ===== 自检 ===== */
+function isDeterministic(ans) {
+  var s = String(ans == null ? '' : ans);
+  if (/[∧∨¬→↔⊕∃∀⊥⊤=≠≤≥<>]/.test(s)) return true;
+  if (/[()[\]]/.test(s) && /[A-Za-z]/.test(s)) return true;
+  var w = s.split(/\s+/).filter(function (x) { return /^[A-Za-z]{3,}/.test(x); });
+  return w.length === 0;
+}
+var L = [];
+function p(s){ L.push(s); }
+var B = window.BANK || [];
+(function(){ var m=[],by={}; B.forEach(function(s){ s.tips=s.tips||[]; s.items=s.items||[];
+  if(by[s.sec]){ var t=by[s.sec]; t.items=t.items.concat(s.items); s.tips.forEach(function(x){ if(t.tips.indexOf(x)<0) t.tips.push(x); }); }
+  else { by[s.sec]=s; m.push(s); } }); B=m; })();
+
+var failSelf = [], failOpt = [], okSelf = 0, nAuto = 0;
+var longAns = [];
+B.forEach(function(sec){
+  sec.items.forEach(function(it){
+    it.parts.forEach(function(p2){
+      var key = sec.sec+'#'+it.no+'#'+p2.k;
+      if(p2.mode === 'tf'){
+        nAuto++;
+        var want = (p2.ans && p2.ans[0] || '').toLowerCase();
+        var label = want === 'true' ? 'True' : (want === 'false' ? 'False' : null);
+        if(!label){ failSelf.push('tf 答案非 true/false: '+key+' -> '+JSON.stringify(p2.ans)); return; }
+        if(!matchAny(label, p2.ans)) failSelf.push('tf 自身不匹配: '+key+' ans='+JSON.stringify(p2.ans));
+        else okSelf++;
+      } else if(p2.mode === 'choice'){
+        nAuto++;
+        var bad = (p2.ans||[]).filter(function(a){ return !matchAny(a, p2.ans); });
+        if(bad.length) failSelf.push('choice 自身不匹配: '+key+' -> '+JSON.stringify(bad));
+        else okSelf++;
+        var missing = (p2.ans||[]).filter(function(a){ return (p2.options||[]).indexOf(a) < 0; });
+        if(missing.length) failOpt.push('choice 答案不在选项里: '+key+' -> '+JSON.stringify(missing));
+        // 干扰项不应被判对
+        (p2.options||[]).forEach(function(o){
+          if((p2.ans||[]).indexOf(o) >= 0) return;
+          if(matchAny(o, p2.ans||[])) failOpt.push('choice 干扰项被误判为正确: '+key+' opt="'+o+'"');
+        });
+      } else if(p2.mode === 'short'){
+        nAuto++;
+        var a0 = (p2.ans||[])[0];
+        if(a0 == null){ failSelf.push('short 无 ans: '+key); return; }
+        if(!matchAny(a0, p2.ans)) failSelf.push('short 自身不匹配: '+key+' ans="'+a0+'"');
+        else okSelf++;
+        if(String(a0).length > 60) longAns.push(key+'  ans="'+String(a0).slice(0,90)+'"');
+      }
+    });
+  });
+});
+p('自动判分小题: '+nAuto+' | 标准答案自检通过: '+okSelf+' | 不通过: '+(nAuto-okSelf));
+p('');
+p('【A】标准答案判不过自己（严重，会误报"错误"）: '+failSelf.length);
+failSelf.slice(0,40).forEach(function(x){ p('  - '+x); });
+p('');
+p('【B】选项/干扰项问题: '+failOpt.length);
+failOpt.slice(0,40).forEach(function(x){ p('  - '+x); });
+p('');
+p('【C】short 答案文本较长（用户输入可能匹配不上，仅提示）: '+longAns.length);
+longAns.slice(0,25).forEach(function(x){ p('  - '+x); });
+p('');
+p('【D】short 答案的自动判分性质:');
+var det = 0, prose = 0, proseKeys = [];
+B.forEach(function(sec){ sec.items.forEach(function(it){ it.parts.forEach(function(p2){
+  if(p2.mode!=='short') return;
+  if(isDeterministic((p2.ans||[])[0])) det++;
+  else { prose++; proseKeys.push(sec.sec+'#'+it.no+'#'+p2.k); }
+}); }); });
+p('  确定性（公式/数值，严格自动判分）: '+det);
+p('  开放表述（英文句子等，改为待自评）: '+prose);
+p('  开放表述清单: '+(proseKeys.length>40?proseKeys.slice(0,40).join(', ')+' …':proseKeys.join(', ')));
+p('');
+p('【E】模拟"提交"逻辑（复制 app.js 的 submitShort 分支），逐题断言预期状态:');
+var simBad = [], simN = 0;
+B.forEach(function(sec){ sec.items.forEach(function(it){ it.parts.forEach(function(p2){
+  var key = sec.sec+'#'+it.no+'#'+p2.k;
+  if(p2.mode === 'short'){
+    simN++;
+    var lenient = p2.lenient || /counterexample/i.test(p2.q||'') || !isDeterministic((p2.ans||[])[0]);
+    var right = (p2.ans||[])[0];
+    // 用标准答案提交 → 确定性题应判 right，开放题应判 skip（待自评）
+    var ok1 = matchAny(right, p2.ans||[]);
+    var st1 = ok1 ? 'right' : (lenient ? 'skip' : 'wrong');
+    var want1 = 'right';
+    if(st1 !== want1) simBad.push(key+' 提交标准答案→'+st1+'，期望 '+want1);
+    // 提交明显错误的答案 → 确定性题判 wrong，开放题判 skip（待自评）
+    var ok2 = matchAny('zzz-not-a-valid-answer-zzz', p2.ans||[]);
+    var st2 = ok2 ? 'right' : (lenient ? 'skip' : 'wrong');
+    var want2 = lenient ? 'skip' : 'wrong';
+    if(st2 !== want2) simBad.push(key+' 提交错误答案→'+st2+'，期望 '+want2);
+  } else if(p2.mode === 'tf' || p2.mode === 'choice'){
+    simN++;
+    var label = p2.mode === 'tf' ? ((p2.ans[0]||'').toLowerCase()==='true'?'True':'False') : (p2.ans||[])[0];
+    var okk = matchAny(label, p2.ans||[]);
+    if(!okk) simBad.push(key+' 提交正确选项→wrong，期望 right');
+  }
+}); }); });
+p('  参与模拟的自动判分小题: '+simN+' | 断言失败: '+simBad.length);
+var eBox = document.getElementById('e');
+var eTxt = '【E】模拟"提交"逻辑断言失败清单: ' + simBad.length + '\n' + simBad.slice(0,30).map(function(x){ return '  - '+x; }).join('\n');
+eBox.textContent = eTxt;
+p('');
+document.getElementById('out').textContent = L.join('\n');
+</script>
+</body></html>

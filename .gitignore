@@ -1,0 +1,28 @@
+# 编辑器与系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-workspace
+
+# 依赖与构建产物（本项目为零依赖，仅作兜底）
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# 本地进度导出
+*-progress-*.json
+dmq-progress*.json
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak

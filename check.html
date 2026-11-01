@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>题库自检</title>
+<style>body{font:13px/1.6 Consolas,monospace;padding:20px;white-space:pre-wrap}h2{font-size:15px}</style>
+</head><body>
+<div id="out">loading…</div>
+<script>window.BANK = window.BANK || [];</script>
+<script src="data/sec11.js"></script>
+<script src="data/sec12.js"></script>
+<script src="data/sec13.js"></script>
+<script src="data/sec14.js"></script>
+<script src="data/sec15a.js"></script>
+<script src="data/sec15b.js"></script>
+<script src="data/sec16.js"></script>
+<script>
+var L = [];
+function p(s){ L.push(s); }
+var B = window.BANK || [];
+(function(){ var m=[],by={}; B.forEach(function(s){ s.tips=s.tips||[]; s.items=s.items||[];
+  if(by[s.sec]){ var t=by[s.sec]; t.items=t.items.concat(s.items); s.tips.forEach(function(x){ if(t.tips.indexOf(x)<0) t.tips.push(x); }); }
+  else { by[s.sec]=s; m.push(s); } }); B=m; })();
+p('BANK sections: ' + B.length);
+var gTot=0,gPart=0,gAuto=0,gSelf=0,gBad=[];
+B.forEach(function(sec){
+  p('');
+  p('=== ' + sec.sec + ' ' + (sec.titleCn||'') + ' | tips:' + (sec.tips||[]).length + ' | items:' + (sec.items||[]).length);
+  var nos = {}, modes={}, partN=0, auto=0, self=0;
+  (sec.items||[]).forEach(function(it){
+    var key = sec.sec+'#'+it.no;
+    if(nos[key]) gBad.push('重复题号 '+key);
+    nos[key]=1;
+    if(!it.type) gBad.push('缺 type: '+key);
+    if(!it.q) gBad.push('缺题干: '+key);
+    if(!it.parts||!it.parts.length){ gBad.push('无小题: '+key); return; }
+    it.parts.forEach(function(p2){
+      partN++;
+      if(!p2.mode) gBad.push('缺 mode: '+key+'#'+p2.k);
+      else { modes[p2.mode]=(modes[p2.mode]||0)+1; if(p2.mode==='self') self++; else auto++; }
+      if(!p2.ref||!String(p2.ref).trim()) gBad.push('缺 ref: '+key+'#'+p2.k);
+      if(!p2.q||!String(p2.q).trim()) gBad.push('缺小题题干: '+key+'#'+p2.k);
+      if(p2.mode!=='self' && (!p2.ans||!p2.ans.length)) gBad.push('缺 ans: '+key+'#'+p2.k+' ('+p2.mode+')');
+      if(p2.mode==='choice' && (!p2.options||!p2.options.length)) gBad.push('缺 options: '+key+'#'+p2.k);
+      if(p2.mode==='choice' && p2.ans && p2.options) {
+        p2.ans.forEach(function(a){ if(p2.options.indexOf(a)<0) gBad.push('ans 不在 options 内: '+key+'#'+p2.k+' -> '+a); });
+      }
+      var blob = (p2.q||'')+' '+(p2.ref||'')+' '+(p2.cn||'');
+      if(blob.indexOf('!')>=0) gBad.push('残留抽取符 "!" : '+key+'#'+p2.k);
+      if(/\bundefined\b|\bNaN\b|\[object Object\]/.test(blob)) gBad.push('占位文本: '+key+'#'+p2.k);
+    });
+  });
+  var ns = Object.keys(nos).map(function(k){return parseInt(k.split('#')[1],10);});
+  var mx = ns.length?Math.max.apply(null,ns):0;
+  var gaps=[]; for(var i=1;i<=mx;i++){ if(!nos[sec.sec+'#'+i]) gaps.push(i); }
+  var dupns = ns.filter(function(v,ix,a){ return a.indexOf(v)!==ix; });
+  p('  小题数: '+partN+' | 自动判分: '+auto+' ('+(partN?Math.round(auto/partN*100):0)+'%) | 自评: '+self);
+  p('  mode 分布: '+JSON.stringify(modes));
+  p('  题号 1..'+mx+(gaps.length?(' | 缺号(节选原文缺失): '+gaps.join(',')):' | 题号连续')+(dupns.length?(' | 重复号: '+dupns.join(',')):''));
+  gTot+=(sec.items||[]).length; gPart+=partN; gAuto+=auto; gSelf+=self;
+});
+p('');
+p('=========== 汇总 ===========');
+p('大题: '+gTot+' | 小题: '+gPart+' | 自动判分: '+gAuto+' ('+(gPart?Math.round(gAuto/gPart*100):0)+'%) | 自评: '+gSelf);
+p('');
+p('问题总数: '+gBad.length);
+var seen={};
+gBad.slice(0,120).forEach(function(b){ var k=b.replace(/[0-9]+#?[a-z0-9]*/g,'*'); seen[k]=(seen[k]||0)+1; });
+p('按类型汇总:');
+Object.keys(seen).forEach(function(k){ p('  '+k+'  x'+seen[k]); });
+p('');
+p('前 60 条明细:');
+gBad.slice(0,60).forEach(function(b){ p('  - '+b); });
+document.getElementById('out').textContent = L.join('\n');
+</script>
+</body></html>
